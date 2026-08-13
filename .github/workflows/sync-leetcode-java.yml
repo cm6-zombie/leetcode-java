@@ -1,0 +1,56 @@
+name: Sync LeetCode Java
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Sync LeetCode submissions
+        uses: joshcai/leetcode-sync@v1.7
+        with:
+          github-token: ${{ github.token }}
+          leetcode-csrf-token: ${{ secrets.LEETCODE_CSRF_TOKEN }}
+          leetcode-session: ${{ secrets.LEETCODE_SESSION }}
+          verbose: true
+          commit-header: "[LeetCode Sync]"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: my-projects
+          fetch-depth: 0
+
+      - name: Keep Java solutions only
+        shell: bash
+        run: |
+          git pull --ff-only origin my-projects
+
+          find . -type f \
+            -name 'solution.*' \
+            ! -name 'solution.java' \
+            -delete
+
+          find . -mindepth 1 -maxdepth 1 -type d \
+            ! -name '.git' \
+            ! -name '.github' \
+            -exec sh -c 'for d; do
+              [ -f "$d/solution.java" ] || rm -rf "$d"
+            done' sh {} +
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          if ! git diff --cached --quiet; then
+            git commit -m "Keep Java LeetCode solutions only"
+            git push origin my-projects
+          fi
